@@ -100,6 +100,8 @@ def download_block(input_ds, args, file_name, block_size, x, y, scale):
                         'BLOCKXSIZE={}'.format(args.tile_size),
                         'BLOCKYSIZE={}'.format(args.tile_size),
                         'COMPRESS={}'.format(args.compress)]
+    if args.overviews:
+        creation_options.append('COPY_SRC_OVERVIEWS=YES')
     print(creation_options)
     ds = gdal.Translate(out_path, input_ds,
                         creationOptions=creation_options,
