@@ -135,7 +135,7 @@ def run_download(args):
         if row is None:
             break
         download_block(input_ds, args, row[1], row[2], row[3], row[4], row[5])
-        cursor.execute('UPDATE task SET complete = 1 WHERE id = {0}'.format(row[0]))
+        cursor.execute('UPDATE task SET complete = 1 WHERE id = ?', [row[0]])
         conn.commit()
         # Do not allow to grow cache infinitely.
         # Drop it after each success download
