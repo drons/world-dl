@@ -3,6 +3,8 @@
 # Usage1: add this file to your projects .git/hooks directory. Rename it to 'pre-commit'.
 # Usage2: call 'git config core.hooksPath .githooks'
 
+set -e
+
 source ./venv/bin/activate
 pylint --module-naming-style=any ./world-dl.py
 

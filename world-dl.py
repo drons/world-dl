@@ -10,7 +10,32 @@ import argparse
 import datetime
 import time
 import sqlite3 as sqlite
+import itertools
 from osgeo import gdal
+
+
+class ImageBlock(object):
+    """Image block coordinates"""
+    def __init__(self, offset_x, offset_y, scale, size):
+        """Constructor"""
+        self.offset_x = offset_x
+        self.offset_y = offset_y
+        self.scale = scale
+        self.size = size
+
+    def window(self):
+        """:returns block window on source image"""
+        return [self.offset_x * self.scale,
+                self.offset_y * self.scale,
+                self.size * self.scale,
+                self.size * self.scale]
+
+    def mask_boundary(self, mask_scale):
+        """:returns block's bounds at mask image"""
+        return (self.offset_x * self.scale / mask_scale,
+                self.offset_y * self.scale / mask_scale,
+                (self.offset_x + self.size) * self.scale / mask_scale,
+                (self.offset_y + self.size) * self.scale / mask_scale)
 
 
 def get_db(args):
@@ -19,16 +44,12 @@ def get_db(args):
     return sqlite.connect(db_file_name)
 
 
-def check_mask(mask, x, y, block_size, mask_scale, input_scale):
+def check_mask(mask, mask_scale, block):
     """Return True if block have some valid data"""
     if mask is None:
         return True
-    x0 = x * input_scale / mask_scale
-    y0 = y * input_scale / mask_scale
-    x1 = (x + block_size) * input_scale / mask_scale
-    y1 = (y + block_size) * input_scale / mask_scale
-
-    return mask[y0:y1, x0:x1].sum() > 0
+    (xmin, ymin, xmax, ymax) = block.mask_boundary(mask_scale)
+    return mask[ymin:ymax, xmin:xmax].sum() > 0
 
 
 def open_mask(args, input_ds):
@@ -92,16 +113,17 @@ def run_init(args):
     last_access DATETIME
     )""")
     valid_block_count = 0
-    for iy in range(0, block_count_y):
+    for block_y in range(0, block_count_y):
         rows = []
-        for ix in range(0, block_count_x):
-            x = ix * args.block_size
-            y = iy * args.block_size
-            if not check_mask(mask, x, y, args.block_size, mask_scale, args.scale):
+        for block_x in range(0, block_count_x):
+            offset_x = block_x * args.block_size
+            offset_y = block_y * args.block_size
+            if not check_mask(mask, mask_scale,
+                              ImageBlock(offset_x, offset_y, args.scale, args.block_size)):
                 continue
-            row = (valid_block_count, args.input, 'gmap_{0}_{1}.tif'.format(x, y),
+            row = (valid_block_count, args.input, 'gmap_{0}_{1}.tif'.format(offset_x, offset_y),
                    None, False, False, args.block_size,
-                   x, y, args.scale, datetime.datetime.now())
+                   offset_x, offset_y, args.scale, datetime.datetime.now())
             rows.append(row)
             valid_block_count = valid_block_count + 1
         cursor.executemany("INSERT INTO task VALUES "
@@ -114,16 +136,13 @@ def run_init(args):
     return 0
 
 
-def download_block(input_ds, args, file_name, block_size, x, y, scale):
+def download_block(input_ds, args, file_name, block):
     """
     Download one block from input datasource
     :param input_ds: Input datasource to download from
     :param args: module args
     :param file_name: output file name
-    :param block_size: downloaded block size
-    :param x: downloaded block X offset
-    :param y: downloaded block Y offset
-    :param scale: downloaded block scale
+    :param block: block to download
     :return: OK
     """
     start = time.time()
@@ -135,17 +154,18 @@ def download_block(input_ds, args, file_name, block_size, x, y, scale):
     if args.overviews:
         creation_options.append('COPY_SRC_OVERVIEWS=YES')
     print(creation_options)
-    ds = gdal.Translate(out_path, input_ds,
-                        creationOptions=creation_options,
-                        srcWin=[x * scale, y * scale,
-                                block_size * scale, block_size * scale],
-                        width=block_size, height=block_size,
-                        callback=gdal.TermProgress)
-    if ds is None:
+    block_ds = gdal.Translate(
+        out_path, input_ds,
+        creationOptions=creation_options,
+        srcWin=block.window(),
+        width=block.size, height=block.size,
+        callback=gdal.TermProgress)
+    if block_ds is None:
         print('Can\'t download block {}, {} from {} to {}'
-              .format(x, y, input_ds.GetDescription(), out_path))
+              .format(block.offset_x, block.offset_y,
+                      input_ds.GetDescription(), out_path))
         return None
-    ds = None
+    block_ds = None
     end = time.time()
     print('Download time', end - start, out_path)
     return 'OK'
@@ -163,14 +183,15 @@ def run_download(args):
         cursor = conn.cursor()
         cursor.execute(
             "SELECT "
-            "id, file_name, block_size, x, y, scale "
+            "id, file_name, x, y, scale, block_size "
             "FROM task WHERE "
             "NOT complete "
             "LIMIT 1")
         row = cursor.fetchone()
         if row is None:
             break
-        download_block(input_ds, args, row[1], row[2], row[3], row[4], row[5])
+        download_block(input_ds, args, row[1],
+                       ImageBlock(row[2], row[3], row[4], row[5]))
         cursor.execute('UPDATE task SET complete = 1 WHERE id = ?', [row[0]])
         conn.commit()
         # Do not allow to grow cache infinitely.
@@ -186,20 +207,17 @@ def get_bounds(input_ds):
     :param input_ds: input datasource
     :return: datasource bounds
     """
-    gt = input_ds.GetGeoTransform()
-    gx = []
-    gy = []
+    gt_mat = input_ds.GetGeoTransform()
+    geox = []
+    geoy = []
     xarr = [0, input_ds.RasterXSize]
     yarr = [0, input_ds.RasterYSize]
 
-    for px in xarr:
-        for py in yarr:
-            x = gt[0] + (px * gt[1]) + (py * gt[2])
-            y = gt[3] + (px * gt[4]) + (py * gt[5])
-            gx.append(x)
-            gy.append(y)
+    for (pix_x, pix_y) in itertools.product(xarr, yarr):
+        geox.append(gt_mat[0] + (pix_x * gt_mat[1]) + (pix_y * gt_mat[2]))
+        geoy.append(gt_mat[3] + (pix_x * gt_mat[4]) + (pix_y * gt_mat[5]))
 
-    return [min(gx), min(gy), max(gx), max(gy)]
+    return [min(geox), min(geoy), max(geox), max(geoy)]
 
 
 def run_merge(args):
