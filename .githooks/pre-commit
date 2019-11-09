@@ -6,6 +6,6 @@
 set -e
 
 source ./venv/bin/activate
-pylint --module-naming-style=any ./world-dl.py
+pylint --disable=old-style-class --module-naming-style=any ./world-dl.py
 
 exit 0

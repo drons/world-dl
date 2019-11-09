@@ -14,7 +14,7 @@ import itertools
 from osgeo import gdal
 
 
-class ImageBlock(object):
+class ImageBlock:
     """Image block coordinates"""
     def __init__(self, offset_x, offset_y, scale, size):
         """Constructor"""
@@ -293,11 +293,11 @@ def main(*argv):
     args = parser.parse_args(argv[1:])
 
     if args.action.count('init') > 0:
-        exit(run_init(args))
+        sys.exit(run_init(args))
     elif args.action.count('download') > 0:
-        exit(run_download(args))
+        sys.exit(run_download(args))
     elif args.action.count('merge') > 0:
-        exit(run_merge(args))
+        sys.exit(run_merge(args))
     else:
         print('Unknown action', args.action)
 
