@@ -51,19 +51,25 @@ optional arguments:
 
 Init download tasks database
 ```
-python world-dl.py -a init -s 16384 -b 1024 \
+python world-dl.py -a init \
+-s 16384 -b 1024 \
 -i ./input/google_map.img \
--o ./out -m ./data/mask-no-ant-3857.tif
+-o ./out \
+-m ./data/mask-no-ant-3857.tif
 ```
 
 Run download
 ```
-python world-dl.py -a download -s 16384 -b 1024 \
--i ./input/google_map.img -o ./out
+python world-dl.py -a download \
+-ov -c LZMA -t 512 \
+-i ./input/google_map.img \
+-o ./out
 ````
 You can interrupt the download, and start it again
 
 Merge images into VRT file
 ```
-python world-dl.py -a merge -i ./input/google_map.img -o ./out
+python world-dl.py -a merge \
+-i ./input/google_map.img \
+-o ./out
 ````
