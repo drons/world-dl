@@ -26,7 +26,7 @@ usage: world-dl.py [-h] [-a {init,download}] -i INPUT -o OUTPUT [-s SCALE]
 
 optional arguments:
   -h, --help            show this help message and exit
-  -a {init,download}, --action {init,download}
+  -a {init,download,merge}, --action {init,download,merge}
                         Action to start
   -i INPUT, --input INPUT
                         Input imagery service or XML config path (see
@@ -59,9 +59,11 @@ python world-dl.py -a init -s 16384 -b 1024 \
 Run download
 ```
 python world-dl.py -a download -s 16384 -b 1024 \
--i ./input/google_map.img \
--o ./out -m ./data/mask-no-ant-3857.tif
+-i ./input/google_map.img -o ./out
 ````
 You can interrupt the download, and start it again
 
-
+Merge images into VRT file
+```
+python world-dl.py -a merge -i ./input/google_map.img -o ./out
+````

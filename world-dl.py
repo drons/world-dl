@@ -9,7 +9,6 @@ import time
 import sqlite3 as sqlite
 from osgeo import gdal
 
-
 def check_mask(mask, x, y, block_size, mask_scale, input_scale):
     if mask is None:
         return True
@@ -143,6 +142,43 @@ def run_download(args):
 
     return 0
 
+def get_bounds(gt, sx, sy):
+    gx = []
+    gy = []
+    xarr=[0,sx]
+    yarr=[0,sy]
+
+    for px in xarr:
+        for py in yarr:
+            x = gt[0] + (px * gt[1]) + (py * gt[2])
+            y = gt[3] + (px * gt[4]) + (py * gt[5])
+            gx.append(x)
+            gy.append(y)
+
+    return [min(gx), min(gy), max(gx), max(gy)]
+
+def run_merge(args):
+    input_ds = gdal.Open(args.input)
+    print('Input dataset size', input_ds.RasterXSize, 'x', input_ds.RasterYSize)
+    gt = input_ds.GetGeoTransform()
+    bounds = get_bounds(input_ds.GetGeoTransform(), input_ds.RasterXSize, input_ds.RasterYSize)
+    print('Dataset bounds', bounds)
+    db_file_name = os.path.join(args.output, 'block.db')
+    conn = sqlite.connect(db_file_name)
+    cursor = conn.cursor()
+
+    complete_block_names = []
+    for row in cursor.execute("SELECT file_name FROM task WHERE complete "):
+        complete_block_names.append(os.path.join(args.output, row[0]))
+    print('Found {} downloaded blocks'.format(len(complete_block_names)))
+
+    gdal.BuildVRT(os.path.join(args.output, 'merge.img'),
+                  complete_block_names,
+                  outputBounds=bounds,
+                  callback=gdal.TermProgress)
+
+    return 0
+
 
 def main(*argv):
     if not argv:
@@ -151,7 +187,7 @@ def main(*argv):
     parser = argparse.ArgumentParser()
 
     parser.add_argument(
-        '-a', '--action', nargs=1, choices=['init', 'download'],
+        '-a', '--action', nargs=1, choices=['init', 'download', 'merge'],
         help='Action to start'
     )
     parser.add_argument(
@@ -196,6 +232,8 @@ def main(*argv):
         exit(run_init(args))
     elif args.action.count('download') > 0:
         exit(run_download(args))
+    elif args.action.count('merge') > 0:
+        exit(run_merge(args))
     else:
         print('Unknown action', args.action)
 
