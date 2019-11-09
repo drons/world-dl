@@ -1,3 +1,4 @@
+[![codefactor.io](https://www.codefactor.io/repository/github/drons/world-dl/badge?style=flat-square)](https://www.codefactor.io/repository/github/drons/world-dl)
 # Imagery download tool from web image services
 
 ## How to run
