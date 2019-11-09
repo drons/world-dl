@@ -4,18 +4,24 @@
 
 ## How to run
 
-### Prepare environment
-```
-sudo apt install virtualenv python3-gdal
-virtualenv -p python3 ./venv
-```
-
-### Clone and run
-
+### Clone project
 ```
 git clone https://github.com/drons/world-dl.git
 cd world-dl.git
-python3 ./world-dl.py --help
+```
+
+### Prepare environment
+```
+sudo apt-get install virtualenv python3-gdal
+virtualenv -p /usr/bin/python3 --system-site-packages ./venv
+source ./venv/bin/activate
+pip install --upgrade pylint numpy argparse pysqlite3
+```
+
+### Run
+
+```
+python world-dl.py --help
 ```
 
 ### Usage
