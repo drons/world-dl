@@ -32,10 +32,10 @@ class ImageBlock(object):
 
     def mask_boundary(self, mask_scale):
         """:returns block's bounds at mask image"""
-        return (self.offset_x * self.scale / mask_scale,
-                self.offset_y * self.scale / mask_scale,
-                (self.offset_x + self.size) * self.scale / mask_scale,
-                (self.offset_y + self.size) * self.scale / mask_scale)
+        return (int(self.offset_x * self.scale / mask_scale),
+                int(self.offset_y * self.scale / mask_scale),
+                int((self.offset_x + self.size) * self.scale / mask_scale),
+                int((self.offset_y + self.size) * self.scale / mask_scale))
 
 
 def get_db(args):
