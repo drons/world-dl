@@ -1,3 +1,6 @@
+"""
+Imagery download tool from web image services
+"""
 from __future__ import print_function
 
 import sys
@@ -9,7 +12,15 @@ import time
 import sqlite3 as sqlite
 from osgeo import gdal
 
+
+def get_db(args):
+    """:returns connection to download tasks DB"""
+    db_file_name = os.path.join(args.output, 'block.db')
+    return sqlite.connect(db_file_name)
+
+
 def check_mask(mask, x, y, block_size, mask_scale, input_scale):
+    """Return True if block have some valid data"""
     if mask is None:
         return True
     x0 = x * input_scale / mask_scale
@@ -20,40 +31,51 @@ def check_mask(mask, x, y, block_size, mask_scale, input_scale):
     return mask[y0:y1, x0:x1].sum() > 0
 
 
+def open_mask(args, input_ds):
+    """
+    Open nodata mask
+    :returns mask and it's scale relative to input dataset
+    """
+    mask_ds = gdal.Open(args.mask)
+    print('Mask dataset size', mask_ds.RasterXSize, 'x', mask_ds.RasterYSize)
+    if mask_ds.RasterXSize >= input_ds.RasterXSize or \
+            mask_ds.RasterYSize >= input_ds.RasterYSize:
+        print('Too big mask image. Discard it.')
+        mask_ds = None
+    mask_scale = int(input_ds.RasterXSize / mask_ds.RasterXSize)
+    if mask_scale != int(input_ds.RasterYSize / mask_ds.RasterYSize):
+        print('Mask image have non uniform scale relative to input dataset')
+        return 1
+    mask = mask_ds.GetRasterBand(1).ReadAsArray()
+    print('Mask is filled only by',
+          int(100 * mask.sum() / (255.0 * mask_ds.RasterXSize * mask_ds.RasterYSize)), '%')
+    mask_ds = None
+    return mask, mask_scale
+
+
 def run_init(args):
+    """Initiate download tasks database"""
     input_ds = gdal.Open(args.input)
     print('Input dataset size', input_ds.RasterXSize, 'x', input_ds.RasterYSize)
     mask = None
     mask_scale = 0
     if args.mask is not None:
-        mask_ds = gdal.Open(args.mask)
-        print('Mask dataset size', mask_ds.RasterXSize, 'x', mask_ds.RasterYSize)
-        if mask_ds.RasterXSize >= input_ds.RasterXSize or mask_ds.RasterYSize >= input_ds.RasterYSize:
-            print('Too big mask image. Discard it.')
-            mask_ds = None
-        mask_scale = int(input_ds.RasterXSize / mask_ds.RasterXSize)
-        if mask_scale != int(input_ds.RasterYSize / mask_ds.RasterYSize):
-            print('Mask image have non uniform scale relative to input dataset')
-            return 1
-        mask = mask_ds.GetRasterBand(1).ReadAsArray()
-        print('Mask is filled only by',
-              int(100*mask.sum()/(255.0*mask_ds.RasterXSize*mask_ds.RasterYSize)), '%')
-        mask_ds = None
+        mask, mask_scale = open_mask(args, input_ds)
 
-    outsx = input_ds.RasterXSize // args.scale
-    outsy = input_ds.RasterYSize // args.scale
-    block_count_x = int(outsx // args.block_size)
-    block_count_y = int(outsy // args.block_size)
+    block_count_x = int(input_ds.RasterXSize // (args.block_size * args.scale))
+    block_count_y = int(input_ds.RasterYSize // (args.block_size * args.scale))
 
     print('block_size', args.block_size)
-    print('Out size', outsx, outsy)
+    print('Out size',
+          input_ds.RasterXSize // args.scale,
+          input_ds.RasterYSize // args.scale)
     print('block_count_x, block_count, total',
-          block_count_x, block_count_y, block_count_x*block_count_y)
+          block_count_x, block_count_y,
+          block_count_x*block_count_y)
 
     shutil.rmtree(args.output, ignore_errors=True)
     os.makedirs(args.output)
-    db_file_name = os.path.join(args.output, 'block.db')
-    conn = sqlite.connect(db_file_name)
+    conn = get_db(args)
     cursor = conn.cursor()
     cursor.execute("""CREATE TABLE task
     (
@@ -93,6 +115,17 @@ def run_init(args):
 
 
 def download_block(input_ds, args, file_name, block_size, x, y, scale):
+    """
+    Download one block from input datasource
+    :param input_ds: Input datasource to download from
+    :param args: module args
+    :param file_name: output file name
+    :param block_size: downloaded block size
+    :param x: downloaded block X offset
+    :param y: downloaded block Y offset
+    :param scale: downloaded block scale
+    :return: OK
+    """
     start = time.time()
     out_path = os.path.join(args.output, file_name)
     creation_options = ['BIGTIFF=YES', 'TILED=YES',
@@ -108,6 +141,10 @@ def download_block(input_ds, args, file_name, block_size, x, y, scale):
                                 block_size * scale, block_size * scale],
                         width=block_size, height=block_size,
                         callback=gdal.TermProgress)
+    if ds is None:
+        print('Can\'t download block {}, {} from {} to {}'
+              .format(x, y, input_ds.GetDescription(), out_path))
+        return None
     ds = None
     end = time.time()
     print('Download time', end - start, out_path)
@@ -115,13 +152,13 @@ def download_block(input_ds, args, file_name, block_size, x, y, scale):
 
 
 def run_download(args):
+    """Run download blocks from input datasource"""
     wms_cache_path = os.path.join(args.output, 'wms')
     gdal.SetConfigOption('GDAL_DEFAULT_WMS_CACHE_PATH', wms_cache_path)
     gdal.SetConfigOption('GDAL_TIFF_OVR_BLOCKSIZE', str(args.tile_size))
     input_ds = gdal.Open(args.input)
     print('Input dataset size', input_ds.RasterXSize, 'x', input_ds.RasterYSize)
-    db_file_name = os.path.join(args.output, 'block.db')
-    conn = sqlite.connect(db_file_name)
+    conn = get_db(args)
     while True:
         cursor = conn.cursor()
         cursor.execute(
@@ -142,11 +179,18 @@ def run_download(args):
 
     return 0
 
-def get_bounds(gt, sx, sy):
+
+def get_bounds(input_ds):
+    """
+    Get datasource bounds in georeferenced units
+    :param input_ds: input datasource
+    :return: datasource bounds
+    """
+    gt = input_ds.GetGeoTransform()
     gx = []
     gy = []
-    xarr=[0,sx]
-    yarr=[0,sy]
+    xarr = [0, input_ds.RasterXSize]
+    yarr = [0, input_ds.RasterYSize]
 
     for px in xarr:
         for py in yarr:
@@ -157,14 +201,15 @@ def get_bounds(gt, sx, sy):
 
     return [min(gx), min(gy), max(gx), max(gy)]
 
+
 def run_merge(args):
+    """Merge downloaded blocks into one VRT file"""
     input_ds = gdal.Open(args.input)
     print('Input dataset size', input_ds.RasterXSize, 'x', input_ds.RasterYSize)
-    gt = input_ds.GetGeoTransform()
-    bounds = get_bounds(input_ds.GetGeoTransform(), input_ds.RasterXSize, input_ds.RasterYSize)
+    bounds = get_bounds(input_ds)
     print('Dataset bounds', bounds)
-    db_file_name = os.path.join(args.output, 'block.db')
-    conn = sqlite.connect(db_file_name)
+
+    conn = get_db(args)
     cursor = conn.cursor()
 
     complete_block_names = []
@@ -181,6 +226,7 @@ def run_merge(args):
 
 
 def main(*argv):
+    """Application entry point"""
     if not argv:
         argv = list(sys.argv)
 
