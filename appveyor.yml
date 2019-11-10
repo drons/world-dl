@@ -11,7 +11,6 @@ for:
       - PYVER: 2
   install:
     - sudo apt-get update -y -q
-    - sudo apt-get upgrade -y -q
     - sudo apt-get install -y -q virtualenv python-gdal
     - virtualenv -p /usr/bin/python2 --system-site-packages ./venv
     - source ./venv/bin/activate
@@ -22,7 +21,6 @@ for:
       - PYVER: 3
   install:
     - sudo apt-get update -y -q
-    - sudo apt-get upgrade -y -q
     - sudo apt-get install -y -q virtualenv python3-gdal
     - virtualenv -p /usr/bin/python3 --system-site-packages ./venv
     - source ./venv/bin/activate
