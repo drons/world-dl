@@ -7,5 +7,5 @@ set -e
 
 source ./venv/bin/activate
 pylint --disable=old-style-class --module-naming-style=any ./world-dl.py
-
+bandit ./world-dl.py
 exit 0
