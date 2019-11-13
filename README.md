@@ -15,7 +15,7 @@ cd world-dl.git
 sudo apt-get install virtualenv python3-gdal
 virtualenv -p /usr/bin/python3 --system-site-packages ./venv
 source ./venv/bin/activate
-pip install --upgrade pylint numpy argparse pysqlite3
+pip install --upgrade requests numpy argparse pysqlite3
 ```
 
 ### Run
@@ -52,6 +52,7 @@ optional arguments:
                         options)
   -m MASK, --mask MASK  select nodata mask image
   -ov, --overviews      download overviews
+  -u, --upload          upload image blocks to https://bashupload.com
 ```
 
 ## Examples

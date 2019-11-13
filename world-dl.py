@@ -11,6 +11,7 @@ import datetime
 import time
 import sqlite3 as sqlite
 import itertools
+import requests
 from osgeo import gdal
 
 
@@ -41,7 +42,9 @@ class ImageBlock:
 def get_db(args):
     """:returns connection to download tasks DB"""
     db_file_name = os.path.join(args.output, 'block.db')
-    return sqlite.connect(db_file_name)
+    conn = sqlite.connect(db_file_name)
+    conn.row_factory = sqlite.Row
+    return conn
 
 
 def check_mask(mask, mask_scale, block):
@@ -171,6 +174,21 @@ def download_block(input_ds, args, file_name, block):
     return 'OK'
 
 
+def upload_block(args, file_name):
+    """Upload image block and return URL"""
+    base_name = os.path.basename(file_name)
+    out_path = os.path.join(args.output, file_name)
+    with open(out_path, 'rb') as file_to_upload:
+        response = requests.post('https://bashupload.com/',
+                                 files={base_name: file_to_upload})
+        url = ''
+        for line in response.text.split('\n'):
+            if line.startswith('wget '):
+                url = line[5:]
+        return url
+    return None
+
+
 def run_download(args):
     """Run download blocks from input datasource"""
     wms_cache_path = os.path.join(args.output, 'wms')
@@ -190,9 +208,16 @@ def run_download(args):
         row = cursor.fetchone()
         if row is None:
             break
-        download_block(input_ds, args, row[1],
-                       ImageBlock(row[2], row[3], row[4], row[5]))
-        cursor.execute('UPDATE task SET complete = 1 WHERE id = ?', [row[0]])
+        download_block(input_ds, args, row['file_name'],
+                       ImageBlock(row['x'], row['y'], row['scale'], row['block_size']))
+        url = None
+        if args.upload:
+            url = upload_block(args, row['file_name'])
+
+        cursor.execute('UPDATE task SET complete = 1, '
+                       'last_access =  datetime(\'now\'), file_url = ? '
+                       'WHERE id = ?',
+                       [url, row['id']])
         conn.commit()
         # Do not allow to grow cache infinitely.
         # Drop it after each success download
@@ -290,6 +315,10 @@ def main(*argv):
     parser.add_argument(
         '-ov', '--overviews', default=False, action='store_true',
         help='download overviews')
+    parser.add_argument(
+        '-u', '--upload', default=False, action='store_true',
+        help='upload image blocks to https://bashupload.com')
+
     args = parser.parse_args(argv[1:])
 
     if args.action.count('init') > 0:
