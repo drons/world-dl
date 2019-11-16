@@ -53,6 +53,7 @@ optional arguments:
   -m MASK, --mask MASK  select nodata mask image
   -ov, --overviews      download overviews
   -u, --upload          upload image blocks to https://bashupload.com
+  -v, --verify          check file hash before merge
 ```
 
 ## Examples

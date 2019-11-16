@@ -6,6 +6,7 @@ from __future__ import print_function
 import sys
 import os
 import shutil
+import hashlib
 import argparse
 import datetime
 import time
@@ -107,6 +108,7 @@ def run_init(args):
     input STRING,
     file_name STRING,
     file_url STRING,
+    file_hash STRING,
     complete BOOL,
     inwork BOOL,
     block_size INT64,
@@ -125,12 +127,12 @@ def run_init(args):
                               ImageBlock(offset_x, offset_y, args.scale, args.block_size)):
                 continue
             row = (valid_block_count, args.input, 'gmap_{0}_{1}.tif'.format(offset_x, offset_y),
-                   None, False, False, args.block_size,
+                   None, None, False, False, args.block_size,
                    offset_x, offset_y, args.scale, datetime.datetime.now())
             rows.append(row)
             valid_block_count = valid_block_count + 1
         cursor.executemany("INSERT INTO task VALUES "
-                           "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", rows)
+                           "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", rows)
         conn.commit()
     conn.close()
     print('Init done with', valid_block_count, 'data blocks queued from',
@@ -174,6 +176,18 @@ def download_block(input_ds, args, file_name, block):
     return 'OK'
 
 
+def get_file_hash(file_name):
+    """Compute file hash"""
+    sha = hashlib.sha256()
+    block_file = open(file_name, 'rb')
+    while True:
+        data = block_file.read(sha.block_size)
+        if not data:
+            break
+        sha.update(data)
+    return sha.hexdigest()
+
+
 def upload_block(args, file_name):
     """Upload image block and return URL"""
     base_name = os.path.basename(file_name)
@@ -211,13 +225,17 @@ def run_download(args):
         download_block(input_ds, args, row['file_name'],
                        ImageBlock(row['x'], row['y'], row['scale'], row['block_size']))
         url = None
+        file_hash = get_file_hash(os.path.join(args.output, row['file_name']))
         if args.upload:
             url = upload_block(args, row['file_name'])
 
-        cursor.execute('UPDATE task SET complete = 1, '
-                       'last_access =  datetime(\'now\'), file_url = ? '
+        cursor.execute('UPDATE task SET '
+                       'complete = 1, '
+                       'last_access =  datetime(\'now\'), '
+                       'file_url = ?, '
+                       'file_hash = ? '
                        'WHERE id = ?',
-                       [url, row['id']])
+                       [url, file_hash, row['id']])
         conn.commit()
         # Do not allow to grow cache infinitely.
         # Drop it after each success download
@@ -256,8 +274,15 @@ def run_merge(args):
     cursor = conn.cursor()
 
     complete_block_names = []
-    for row in cursor.execute("SELECT file_name FROM task WHERE complete "):
-        complete_block_names.append(os.path.join(args.output, row[0]))
+    for row in cursor.execute("SELECT file_name, file_hash FROM task WHERE complete "):
+        file_name = os.path.join(args.output, row['file_name'])
+        file_hash = get_file_hash(file_name)
+        if file_hash != row['file_hash']:
+            print('Invalid hash for file {}'.format(row['file_name']))
+            return 1
+        print('Verify {:32} {} OK!'.format(row['file_name'], row['file_hash']))
+        complete_block_names.append(file_name)
+
     print('Found {} downloaded blocks'.format(len(complete_block_names)))
 
     gdal.BuildVRT(os.path.join(args.output, 'merge.img'),
@@ -318,6 +343,9 @@ def main(*argv):
     parser.add_argument(
         '-u', '--upload', default=False, action='store_true',
         help='upload image blocks to https://bashupload.com')
+    parser.add_argument(
+        '-v', '--verify', default=False, action='store_true',
+        help='check file hash before merge')
 
     args = parser.parse_args(argv[1:])
 

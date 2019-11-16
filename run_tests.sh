@@ -16,6 +16,6 @@ python world-dl.py -a download \
 -i ./input/google_map.img \
 -o ./out
 
-python world-dl.py -a merge \
+python world-dl.py -a merge -v \
 -i ./input/google_map.img \
 -o ./out
