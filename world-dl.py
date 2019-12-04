@@ -171,11 +171,11 @@ def download_block(input_ds, args, file_name, block):
         print('Can\'t download block {}, {} from {} to {}'
               .format(block.offset_x, block.offset_y,
                       input_ds.GetDescription(), out_path))
-        return None
+        return False
     block_ds = None
     end = time.time()
     print('Download time', end - start, out_path)
-    return 'OK'
+    return True
 
 
 def get_file_hash(file_name):
@@ -220,24 +220,27 @@ def run_download(args):
             "id, file_name, x, y, scale, block_size "
             "FROM task WHERE "
             "NOT complete "
+            "ORDER BY last_access ASC "
             "LIMIT 1")
         row = cursor.fetchone()
         if row is None:
             break
-        download_block(input_ds, args, row['file_name'],
-                       ImageBlock(row['x'], row['y'], row['scale'], row['block_size']))
         url = None
-        file_hash = get_file_hash(os.path.join(args.output, row['file_name']))
-        if args.upload:
-            url = upload_block(args, row['file_name'])
-
+        file_hash = None
+        complete = download_block(input_ds, args, row['file_name'],
+                                  ImageBlock(row['x'], row['y'],
+                                             row['scale'], row['block_size']))
+        if complete:
+            file_hash = get_file_hash(os.path.join(args.output, row['file_name']))
+            if args.upload:
+                url = upload_block(args, row['file_name'])
         cursor.execute('UPDATE task SET '
-                       'complete = 1, '
-                       'last_access =  datetime(\'now\'), '
+                       'complete = ?, '
+                       'last_access = datetime(\'now\'), '
                        'file_url = ?, '
                        'file_hash = ? '
                        'WHERE id = ?',
-                       [url, file_hash, row['id']])
+                       [complete, url, file_hash, row['id']])
         conn.commit()
         # Do not allow to grow cache infinitely.
         # Drop it after each success download
