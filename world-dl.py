@@ -265,6 +265,20 @@ def get_bounds(input_ds):
     return [min(geox), min(geoy), max(geox), max(geoy)]
 
 
+def verify_file(args, file_name, expected_hash):
+    """
+    :param file_name: file name to verify
+    :return: OK and file verification message
+    """
+    if not os.path.isfile(file_name):
+        return False, 'File not found'
+    if args.verify and expected_hash:
+        file_hash = get_file_hash(file_name)
+        if file_hash != expected_hash:
+            return False, 'Invalid file hash'
+    return True, 'OK'
+
+
 def run_merge(args):
     """Merge downloaded blocks into one VRT file"""
     input_ds = gdal.Open(args.input)
@@ -276,16 +290,28 @@ def run_merge(args):
     cursor = conn.cursor()
 
     complete_block_names = []
+    failed_block_names = []
     for row in cursor.execute("SELECT file_name, file_hash FROM task WHERE complete "):
         file_name = os.path.join(args.output, row['file_name'])
-        file_hash = get_file_hash(file_name)
-        if file_hash != row['file_hash']:
-            print('Invalid hash for file {}'.format(row['file_name']))
-            return 1
-        print('Verify {:32} {} OK!'.format(row['file_name'], row['file_hash']))
-        complete_block_names.append(file_name)
+        file_ok, msg = verify_file(args, file_name, row['file_hash'])
+        if not file_ok:
+            print('\033[91m{:32} {}\033[0m'.format(row['file_name'], msg))
+            failed_block_names.append([row['file_name']])
+        else:
+            print('{:32} {} {}!'.format(row['file_name'], row['file_hash'], msg))
+            complete_block_names.append(file_name)
 
     print('Found {} downloaded blocks'.format(len(complete_block_names)))
+    if failed_block_names:
+        print('\033[91mFound {} invalid blocks. Rerun download.\033[0m'
+              .format(len(failed_block_names)))
+        cursor.executemany('UPDATE task SET '
+                           'complete = 0, last_access =  datetime(\'now\'), '
+                           'file_url = Null, file_hash = Null '
+                           'WHERE file_name = ?',
+                           failed_block_names)
+        conn.commit()
+        return 1
 
     gdal.BuildVRT(os.path.join(args.output, 'merge.img'),
                   complete_block_names,

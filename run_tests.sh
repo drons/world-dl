@@ -16,6 +16,20 @@ python world-dl.py -a download \
 -i ./input/google_map.img \
 -o ./out
 
+rm ./out/gmap_0_0.tif
+rm ./out/gmap_0_2048.tif
+echo "Hello" >> ./out/gmap_2048_2048.tif
+
+python world-dl.py -a merge -v \
+-i ./input/google_map.img \
+-o ./out || true && false
+
+python world-dl.py -a download \
+-ov -u -c LZMA -t 512 \
+-i ./input/google_map.img \
+-o ./out
+
 python world-dl.py -a merge -v \
 -i ./input/google_map.img \
 -o ./out
+

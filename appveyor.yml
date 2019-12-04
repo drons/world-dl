@@ -34,4 +34,9 @@ test_script:
   - bandit ./world-dl.py
   - python world-dl.py -a init -s 131072 -b 1024 -i ./input/google_map.img -o ./out -m ./data/mask-no-ant-3857.tif
   - python world-dl.py -a download -ov -u -c LZMA -t 512 -i ./input/google_map.img -o ./out
+  - rm ./out/gmap_0_0.tif
+  - rm ./out/gmap_0_1024.tif
+  - echo "Hello" >> ./out/gmap_1024_1024.tif
+  - python world-dl.py -a merge -v -i ./input/google_map.img -o ./out || true
+  - python world-dl.py -a download -ov -u -c LZMA -t 512 -i ./input/google_map.img -o ./out
   - python world-dl.py -a merge -v -i ./input/google_map.img -o ./out
