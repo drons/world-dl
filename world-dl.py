@@ -150,6 +150,8 @@ def download_block(input_ds, args, file_name, block):
     :param block: block to download
     :return: OK
     """
+    if args.proxy:
+        gdal.SetConfigOption('GDAL_HTTP_PROXY', args.proxy)
     start = time.time()
     out_path = os.path.join(args.output, file_name)
     creation_options = ['BIGTIFF=YES', 'TILED=YES',
@@ -346,6 +348,9 @@ def main(*argv):
     parser.add_argument(
         '-v', '--verify', default=False, action='store_true',
         help='check file hash before merge')
+    parser.add_argument(
+        '-p', '--proxy', default=None,
+        help='Run download via http proxy (format host:port)')
 
     args = parser.parse_args(argv[1:])
 
