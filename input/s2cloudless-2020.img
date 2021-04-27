@@ -1,0 +1,21 @@
+<GDAL_WMTS>
+  <!--
+    gdal_translate WMTS:https://tiles.maps.eox.at/wmts/1.0.0/WMTSCapabilities.xml,layer=s2cloudless-2020_3857,tilematrixset=GoogleMapsCompatible wmts.xml -of WMTS
+  -->
+  <GetCapabilitiesUrl>https://tiles.maps.eox.at/wmts/1.0.0/WMTSCapabilities.xml</GetCapabilitiesUrl>
+  <Layer>s2cloudless-2020_3857</Layer>
+  <Style>default</Style>
+  <TileMatrixSet>GoogleMapsCompatible</TileMatrixSet>
+  <DataWindow>
+    <UpperLeftX>-20037508.342789</UpperLeftX>
+    <UpperLeftY>20037508.342789</UpperLeftY>
+    <LowerRightX>20037508.34278949</LowerRightX>
+    <LowerRightY>-20037508.34278949</LowerRightY>
+  </DataWindow>
+  <BandsCount>3</BandsCount>
+  <Cache />
+  <UnsafeSSL>true</UnsafeSSL>
+  <ZeroBlockHttpCodes>204,404</ZeroBlockHttpCodes>
+  <ZeroBlockOnServerException>true</ZeroBlockOnServerException>
+  <MaxConnections>4</MaxConnections >
+</GDAL_WMTS>
