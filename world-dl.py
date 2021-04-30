@@ -187,12 +187,12 @@ def download_block(input_ds, args, file_name, block):
 def get_file_hash(file_name):
     """Compute file hash"""
     sha = hashlib.sha256()
-    block_file = open(file_name, 'rb')
-    while True:
-        data = block_file.read(sha.block_size)
-        if not data:
-            break
-        sha.update(data)
+    with open(file_name, 'rb') as block_file:
+        while True:
+            data = block_file.read(sha.block_size)
+            if not data:
+                break
+            sha.update(data)
     return sha.hexdigest()
 
 

@@ -14,7 +14,7 @@ for:
     - sudo apt-get install -y -q virtualenv python-gdal
     - virtualenv -p /usr/bin/python2 --system-site-packages ./venv
     - source ./venv/bin/activate
-    - pip install --upgrade codecov coverage pylint bandit requests numpy argparse pysqlite3
+    - pip install --upgrade tqdm codecov coverage pylint bandit==1.6.2 requests numpy argparse pysqlite3
 -
   matrix:
     only:
@@ -24,7 +24,8 @@ for:
     - sudo apt-get install -y -q virtualenv python3-gdal
     - virtualenv -p /usr/bin/python3 --system-site-packages ./venv
     - source ./venv/bin/activate
-    - pip install --upgrade codecov coverage pylint bandit requests numpy argparse pysqlite3
+    - pip install --upgrade pip
+    - pip install --upgrade tqdm codecov coverage pylint bandit requests numpy argparse pysqlite3
 
 build: off
 
