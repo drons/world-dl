@@ -16,7 +16,7 @@ cd world-dl.git
 sudo apt-get install virtualenv python3-gdal
 virtualenv -p /usr/bin/python3 --system-site-packages ./venv
 source ./venv/bin/activate
-pip install --upgrade requests numpy argparse pysqlite3
+pip install --upgrade tqdm requests numpy argparse pysqlite3
 ```
 
 ### Run
@@ -27,10 +27,10 @@ python world-dl.py --help
 
 ### Usage
 ```
-usage: world-dl.py [-h] [-a {init,download}] -i INPUT -o OUTPUT [-s SCALE]
-                   [-b BLOCK_SIZE] [-t TILE_SIZE]
+usage: world-dl.py [-h] [-a {init,download,merge}] -i INPUT -o OUTPUT
+                   [-s SCALE] [-b BLOCK_SIZE] [-t TILE_SIZE]
                    [-c {JPEG,LZW,PACKBITS,DEFLATE,CCITTRLE,CCITTFAX3,CCITTFAX4,LZMA,ZSTD,LERC,LERC_DEFLATE,LERC_ZSTD,WEBP,NONE}]
-                   [-m MASK] [-ov]
+                   [-m MASK] [-ov] [-u] [-v] [-p PROXY] [-k]
 
 optional arguments:
   -h, --help            show this help message and exit
@@ -55,6 +55,9 @@ optional arguments:
   -ov, --overviews      download overviews
   -u, --upload          upload image blocks to https://bashupload.com
   -v, --verify          check file hash before merge
+  -p PROXY, --proxy PROXY
+                        Run download via http proxy (format host:port)
+  -k, --keep-cache      Keep tile cache after block complete
 ```
 
 ## Examples
