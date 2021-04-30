@@ -232,10 +232,14 @@ def run_download(args):
         wms_cache_path = os.path.join(args.output, 'wms_%d_%d_%d' %
                                       (row['scale'], row['x'], row['y']))
         gdal.SetConfigOption('GDAL_DEFAULT_WMS_CACHE_PATH', wms_cache_path)
+        gdal.SetErrorHandler('CPLQuietErrorHandler')
         input_ds = gdal.Open(args.input)
-        complete = download_block(input_ds, args, row['file_name'],
-                                  ImageBlock(row['x'], row['y'],
-                                             row['scale'], row['block_size']))
+        try:
+            complete = download_block(input_ds, args, row['file_name'],
+                                      ImageBlock(row['x'], row['y'],
+                                                 row['scale'], row['block_size']))
+        except ValueError:
+            complete = False
         input_ds = None
         if complete:
             file_hash = get_file_hash(os.path.join(args.output, row['file_name']))
@@ -251,8 +255,9 @@ def run_download(args):
         conn.commit()
         # Do not allow to grow cache infinitely.
         # Drop it after each success download
-        if not args.keep_cache:
+        if complete and not args.keep_cache:
             shutil.rmtree(wms_cache_path, ignore_errors=True)
+
 
     return 0
 
