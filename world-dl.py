@@ -9,12 +9,11 @@ import shutil
 import hashlib
 import argparse
 import datetime
-import time
 import sqlite3 as sqlite
 import itertools
 import requests
 from osgeo import gdal
-
+from tqdm import tqdm
 
 class ImageBlock:
     """Image block coordinates"""
@@ -141,6 +140,15 @@ def run_init(args):
     return 0
 
 
+def tqdm_callback(complete, message, progress):
+    """
+    bridge between tqdm and gdal progress callback
+    """
+    _ = message
+    progress.update(int(complete * 10000) - progress.n)
+    return 1
+
+
 def download_block(input_ds, args, file_name, block):
     """
     Download one block from input datasource
@@ -152,7 +160,6 @@ def download_block(input_ds, args, file_name, block):
     """
     if args.proxy:
         gdal.SetConfigOption('GDAL_HTTP_PROXY', args.proxy)
-    start = time.time()
     out_path = os.path.join(args.output, file_name)
     creation_options = ['BIGTIFF=YES', 'TILED=YES',
                         'BLOCKXSIZE={}'.format(args.tile_size),
@@ -160,20 +167,20 @@ def download_block(input_ds, args, file_name, block):
                         'COMPRESS={}'.format(args.compress)]
     if args.overviews:
         creation_options.append('COPY_SRC_OVERVIEWS=YES')
+    progress = tqdm(total=10000)
+    progress.set_description(out_path)
     block_ds = gdal.Translate(
         out_path, input_ds,
         creationOptions=creation_options,
         srcWin=block.window(),
         width=block.size, height=block.size,
-        callback=gdal.TermProgress)
+        callback=tqdm_callback, callback_data=progress)
     if block_ds is None:
         print('Can\'t download block {}, {} from {} to {}'
               .format(block.offset_x, block.offset_y,
                       input_ds.GetDescription(), out_path))
         return False
     block_ds = None
-    end = time.time()
-    print('Download time', end - start, out_path)
     return True
 
 

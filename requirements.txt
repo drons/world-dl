@@ -2,3 +2,5 @@ numpy
 argparse
 pysqlite3
 GDAL
+tqdm
+
