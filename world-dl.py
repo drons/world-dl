@@ -160,7 +160,6 @@ def download_block(input_ds, args, file_name, block):
                         'COMPRESS={}'.format(args.compress)]
     if args.overviews:
         creation_options.append('COPY_SRC_OVERVIEWS=YES')
-    print(creation_options)
     block_ds = gdal.Translate(
         out_path, input_ds,
         creationOptions=creation_options,
@@ -207,11 +206,7 @@ def upload_block(args, file_name):
 
 def run_download(args):
     """Run download blocks from input datasource"""
-    wms_cache_path = os.path.join(args.output, 'wms')
-    gdal.SetConfigOption('GDAL_DEFAULT_WMS_CACHE_PATH', wms_cache_path)
     gdal.SetConfigOption('GDAL_TIFF_OVR_BLOCKSIZE', str(args.tile_size))
-    input_ds = gdal.Open(args.input)
-    print('Input dataset size', input_ds.RasterXSize, 'x', input_ds.RasterYSize)
     conn = get_db(args)
     while True:
         cursor = conn.cursor()
@@ -227,9 +222,14 @@ def run_download(args):
             break
         url = None
         file_hash = None
+        wms_cache_path = os.path.join(args.output, 'wms_%d_%d_%d' %
+                                      (row['scale'], row['x'], row['y']))
+        gdal.SetConfigOption('GDAL_DEFAULT_WMS_CACHE_PATH', wms_cache_path)
+        input_ds = gdal.Open(args.input)
         complete = download_block(input_ds, args, row['file_name'],
                                   ImageBlock(row['x'], row['y'],
                                              row['scale'], row['block_size']))
+        input_ds = None
         if complete:
             file_hash = get_file_hash(os.path.join(args.output, row['file_name']))
             if args.upload:
@@ -244,7 +244,8 @@ def run_download(args):
         conn.commit()
         # Do not allow to grow cache infinitely.
         # Drop it after each success download
-        shutil.rmtree(wms_cache_path, ignore_errors=True)
+        if not args.keep_cache:
+            shutil.rmtree(wms_cache_path, ignore_errors=True)
 
     return 0
 
@@ -380,7 +381,9 @@ def main(*argv):
     parser.add_argument(
         '-p', '--proxy', default=None,
         help='Run download via http proxy (format host:port)')
-
+    parser.add_argument(
+        '-k', '--keep-cache', default=False, action='store_true',
+        help='Keep tile cache after block complete')
     args = parser.parse_args(argv[1:])
 
     if args.action.count('init') > 0:
