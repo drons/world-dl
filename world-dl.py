@@ -179,6 +179,7 @@ def download_block(input_ds, args, file_name, block):
             print('Can\'t download block {}, {} from {} to {}'
                   .format(block.offset_x, block.offset_y,
                           input_ds.GetDescription(), out_path))
+            print('{}'.format(gdal.GetLastErrorMsg()))
             return False
         block_ds = None
     return True
