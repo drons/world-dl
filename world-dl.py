@@ -247,11 +247,11 @@ def run_download(args):
                 url = upload_block(args, row['file_name'])
         cursor.execute('UPDATE task SET '
                        'complete = ?, '
-                       'last_access = datetime(\'now\'), '
+                       'last_access = ?, '
                        'file_url = ?, '
                        'file_hash = ? '
                        'WHERE id = ?',
-                       [complete, url, file_hash, row['id']])
+                       [complete, datetime.datetime.now(), url, file_hash, row['id']])
         conn.commit()
         # Do not allow to grow cache infinitely.
         # Drop it after each success download
@@ -322,7 +322,7 @@ def run_merge(args):
         print('\033[91mFound {} invalid blocks. Rerun download.\033[0m'
               .format(len(failed_block_names)))
         cursor.executemany('UPDATE task SET '
-                           'complete = 0, last_access =  datetime(\'now\'), '
+                           'complete = 0, '
                            'file_url = Null, file_hash = Null '
                            'WHERE file_name = ?',
                            failed_block_names)
