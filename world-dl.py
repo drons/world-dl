@@ -87,7 +87,10 @@ def run_init(args):
 
     block_count_x = int(input_ds.RasterXSize // (args.block_size * args.scale))
     block_count_y = int(input_ds.RasterYSize // (args.block_size * args.scale))
-
+    if (input_ds.RasterXSize % (args.block_size * args.scale)) > 0:
+        block_count_x = block_count_x + 1
+    if (input_ds.RasterYSize % (args.block_size * args.scale)) > 0:
+        block_count_y = block_count_y + 1
     print('block_size', args.block_size)
     print('Out size',
           input_ds.RasterXSize // args.scale,
