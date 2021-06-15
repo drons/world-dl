@@ -151,13 +151,14 @@ def tqdm_callback(complete, message, progress):
     return 1
 
 
-def download_block(input_ds, args, file_name, block):
+def download_block(input_ds, args, file_name, message, block):
     """
     Download one block from input datasource
     :param input_ds: Input datasource to download from
     :param args: module args
     :param file_name: output file name
     :param block: block to download
+    :param message: global progress message
     :return: OK
     """
     if args.proxy:
@@ -170,7 +171,7 @@ def download_block(input_ds, args, file_name, block):
     if args.overviews:
         creation_options.append('COPY_SRC_OVERVIEWS=YES')
     with tqdm(total=100) as progress:
-        progress.set_description(out_path)
+        progress.set_description(message)
         block_ds = gdal.Translate(
             out_path, input_ds,
             creationOptions=creation_options,
@@ -220,6 +221,9 @@ def run_download(args):
     conn = get_db(args)
     while True:
         cursor = conn.cursor()
+        cursor.execute("SELECT 100 * AVG(CASE WHEN complete THEN 1 ELSE 0 END) "
+                       "AS completeness FROM task;")
+        completeness = cursor.fetchone()['completeness']
         cursor.execute(
             "SELECT "
             "id, file_name, x, y, scale, block_size "
@@ -238,7 +242,8 @@ def run_download(args):
         gdal.SetErrorHandler('CPLQuietErrorHandler')
         input_ds = gdal.Open(args.input)
         try:
-            complete = download_block(input_ds, args, row['file_name'],
+            msg = '%s (%d %d) %d%%' % (args.output, row['x'], row['y'], completeness)
+            complete = download_block(input_ds, args, row['file_name'], msg,
                                       ImageBlock(row['x'], row['y'],
                                                  row['scale'], row['block_size']))
         except ValueError:
