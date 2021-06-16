@@ -315,15 +315,17 @@ def run_merge(args):
 
     complete_block_names = []
     failed_block_names = []
-    for row in cursor.execute("SELECT file_name, file_hash FROM task WHERE complete "):
-        file_name = os.path.join(args.output, row['file_name'])
-        file_ok, msg = verify_file(args, file_name, row['file_hash'])
-        if not file_ok:
-            print('\033[91m{:32} {}\033[0m'.format(row['file_name'], msg))
-            failed_block_names.append([row['file_name']])
-        else:
-            print('{:32} {} {}!'.format(row['file_name'], row['file_hash'], msg))
-            complete_block_names.append(file_name)
+    with tqdm(cursor.execute("SELECT file_name, file_hash "
+                             "FROM task WHERE complete ").fetchall()) as trows:
+        for row in trows:
+            trows.set_description("Verify file %s" % row['file_name'])
+            file_name = os.path.join(args.output, row['file_name'])
+            file_ok, msg = verify_file(args, file_name, row['file_hash'])
+            if not file_ok:
+                print('\033[91m{:32} {}\033[0m'.format(row['file_name'], msg))
+                failed_block_names.append([row['file_name']])
+            else:
+                complete_block_names.append(file_name)
 
     print('Found {} downloaded blocks'.format(len(complete_block_names)))
     if failed_block_names:
