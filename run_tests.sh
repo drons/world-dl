@@ -9,7 +9,8 @@ coverage run --append world-dl.py -a init \
 -s 65536 -b 2048 \
 -i ./input/google_map.img \
 -o ./out \
--m ./data/mask-no-ant-3857.tif
+-m ./data/mask-no-ant-3857.tif \
+-ml ./data/au.geojson
 
 coverage run --append world-dl.py -a download \
 -ov -u -c LZMA -t 512 \

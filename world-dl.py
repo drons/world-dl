@@ -12,7 +12,7 @@ import datetime
 import sqlite3 as sqlite
 import itertools
 import requests
-from osgeo import gdal
+from osgeo import gdal, ogr, osr
 from tqdm import tqdm
 
 class ImageBlock:
@@ -55,6 +55,34 @@ def check_mask(mask, mask_scale, block):
     return mask[ymin:ymax, xmin:xmax].sum() > 0
 
 
+def check_mask_layer(mask_dataset, mask_layer_name, input_ds, img_block):
+    """Return True if block have intersection with vector mask"""
+    if mask_dataset is None:
+        return True
+    geo_trans = input_ds.GetGeoTransform()
+    input_sr = input_ds.GetSpatialRef()
+    mask_sr = mask_dataset.GetLayerByName(mask_layer_name).GetSpatialRef()
+    coord_trans = osr.CoordinateTransformation(input_sr, mask_sr)
+    (xmin, ymin, width, height) = img_block.window()
+    points = [[xmin, ymin],
+              [xmin + width, ymin],
+              [xmin + width, ymin + height],
+              [xmin, ymin + height],
+              [xmin, ymin]]
+    box = ogr.Geometry(ogr.wkbLinearRing)
+    for point in points:
+        geo = gdal.ApplyGeoTransform(geo_trans, point[0], point[1])
+        box.AddPoint(geo[0], geo[1])
+    geom = ogr.Geometry(ogr.wkbPolygon)
+    geom.AddGeometry(box)
+    geom.Transform(coord_trans)
+    sql = f"SELECT * FROM {mask_layer_name} LIMIT 1" # nosec B608
+    with mask_dataset.ExecuteSQL(sql, geom) as layer:
+        if layer is None:
+            return False
+        return layer.GetFeatureCount() > 0
+    return False
+
 def open_mask(args, input_ds):
     """
     Open nodata mask
@@ -76,15 +104,27 @@ def open_mask(args, input_ds):
     return mask, mask_scale
 
 
+def open_mask_dataset(args):
+    """
+    Open nodata vector layer mask
+    :returns mask vector dataset and layer name
+    """
+    mask_dataset = ogr.Open(args.mask_layer)
+    layer = mask_dataset.GetLayer()
+    layer_name = layer.GetName()
+    print('Mask layer dataset', args.mask_layer, ' layer name', layer_name)
+    return mask_dataset, layer_name
+
 def run_init(args):
     """Initiate download tasks database"""
     input_ds = gdal.Open(args.input)
     print('Input dataset size', input_ds.RasterXSize, 'x', input_ds.RasterYSize)
-    mask = None
-    mask_scale = 0
+    mask, mask_scale = None, 0
+    mask_dataset, mask_layer_name = None, None
     if args.mask is not None:
         mask, mask_scale = open_mask(args, input_ds)
-
+    if args.mask_layer is not None:
+        mask_dataset, mask_layer_name = open_mask_dataset(args)
     block_count_x = int(input_ds.RasterXSize // (args.block_size * args.scale))
     block_count_y = int(input_ds.RasterYSize // (args.block_size * args.scale))
     if (input_ds.RasterXSize % (args.block_size * args.scale)) > 0:
@@ -124,10 +164,12 @@ def run_init(args):
         for block_x in range(0, block_count_x):
             offset_x = block_x * args.block_size
             offset_y = block_y * args.block_size
-            if not check_mask(mask, mask_scale,
-                              ImageBlock(offset_x, offset_y, args.scale, args.block_size)):
+            img_block = ImageBlock(offset_x, offset_y, args.scale, args.block_size)
+            if not check_mask(mask, mask_scale, img_block):
                 continue
-            row = (valid_block_count, args.input, 'gmap_{0}_{1}.tif'.format(offset_x, offset_y),
+            if not check_mask_layer(mask_dataset, mask_layer_name, input_ds, img_block):
+                continue
+            row = (valid_block_count, args.input, f'gmap_{offset_x}_{offset_y}.tif',
                    None, None, False, False, args.block_size,
                    offset_x, offset_y, args.scale, datetime.datetime.now())
             rows.append(row)
@@ -165,9 +207,9 @@ def download_block(input_ds, args, file_name, message, block):
         gdal.SetConfigOption('GDAL_HTTP_PROXY', args.proxy)
     out_path = os.path.join(args.output, file_name)
     creation_options = ['BIGTIFF=YES', 'TILED=YES',
-                        'BLOCKXSIZE={}'.format(args.tile_size),
-                        'BLOCKYSIZE={}'.format(args.tile_size),
-                        'COMPRESS={}'.format(args.compress)]
+                        f'BLOCKXSIZE={args.tile_size}',
+                        f'BLOCKYSIZE={args.tile_size}',
+                        f'COMPRESS={args.compress}']
     if args.overviews:
         creation_options.append('COPY_SRC_OVERVIEWS=YES')
     with tqdm(total=100) as progress:
@@ -179,10 +221,9 @@ def download_block(input_ds, args, file_name, message, block):
             width=block.size, height=block.size,
             callback=tqdm_callback, callback_data=progress)
     if block_ds is None:
-        print('Can\'t download block {}, {} from {} to {}'
-              .format(block.offset_x, block.offset_y,
-                      input_ds.GetDescription(), out_path))
-        print('{}'.format(gdal.GetLastErrorMsg()))
+        print(f'Can\'t download block {block.offset_x}, {block.offset_y} '
+              f'from {input_ds.GetDescription()} to {out_path}')
+        print(f'{gdal.GetLastErrorMsg()}')
         return False
     block_ds = None
     return True
@@ -206,7 +247,8 @@ def upload_block(args, file_name):
     out_path = os.path.join(args.output, file_name)
     with open(out_path, 'rb') as file_to_upload:
         response = requests.post('https://bashupload.com/',
-                                 files={base_name: file_to_upload})
+                                 files={base_name: file_to_upload},
+                                 timeout=300)
         url = ''
         for line in response.text.split('\n'):
             if line.startswith('wget '):
@@ -236,13 +278,12 @@ def run_download(args):
             break
         url = None
         file_hash = None
-        wms_cache_path = os.path.join(args.output, 'wms_%d_%d_%d' %
-                                      (row['scale'], row['x'], row['y']))
+        wms_cache_path = os.path.join(args.output, f"wms_{row['scale']}_{row['x']}_{row['y']}")
         gdal.SetConfigOption('GDAL_DEFAULT_WMS_CACHE_PATH', wms_cache_path)
         gdal.SetErrorHandler('CPLQuietErrorHandler')
         input_ds = gdal.Open(args.input)
         try:
-            msg = '%s (%d %d) %d%%' % (args.output, row['x'], row['y'], completeness)
+            msg = f"{args.output} ({row['x']} {row['y']}) {completeness}%"
             complete = download_block(input_ds, args, row['file_name'], msg,
                                       ImageBlock(row['x'], row['y'],
                                                  row['scale'], row['block_size']))
@@ -318,19 +359,18 @@ def run_merge(args):
     with tqdm(cursor.execute("SELECT file_name, file_hash "
                              "FROM task WHERE complete ").fetchall()) as trows:
         for row in trows:
-            trows.set_description("Verify file %s" % row['file_name'])
+            trows.set_description(f"Verify file {row['file_name']}")
             file_name = os.path.join(args.output, row['file_name'])
             file_ok, msg = verify_file(args, file_name, row['file_hash'])
             if not file_ok:
-                print('\033[91m{:32} {}\033[0m'.format(row['file_name'], msg))
+                print(f"\033[91m{row['file_name']:32} {msg}\033[0m")
                 failed_block_names.append([row['file_name']])
             else:
                 complete_block_names.append(file_name)
 
-    print('Found {} downloaded blocks'.format(len(complete_block_names)))
+    print(f'Found {len(complete_block_names)} downloaded blocks')
     if failed_block_names:
-        print('\033[91mFound {} invalid blocks. Rerun download.\033[0m'
-              .format(len(failed_block_names)))
+        print(f'\033[91mFound {len(failed_block_names)} invalid blocks. Rerun download.\033[0m')
         cursor.executemany('UPDATE task SET '
                            'complete = 0, '
                            'file_url = Null, file_hash = Null '
@@ -390,6 +430,10 @@ def main(*argv):
     parser.add_argument(
         '-m', '--mask', default=None,
         help='select nodata mask image'
+    )
+    parser.add_argument(
+        '-ml', '--mask-layer', default=None,
+        help='select nodata mask vector layer'
     )
     parser.add_argument(
         '-ov', '--overviews', default=False, action='store_true',
