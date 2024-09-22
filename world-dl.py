@@ -77,11 +77,12 @@ def check_mask_layer(mask_dataset, mask_layer_name, input_ds, img_block):
     geom.AddGeometry(box)
     geom.Transform(coord_trans)
     sql = f"SELECT * FROM {mask_layer_name} LIMIT 1" # nosec B608
-    with mask_dataset.ExecuteSQL(sql, geom) as layer:
-        if layer is None:
-            return False
-        return layer.GetFeatureCount() > 0
-    return False
+    layer = mask_dataset.ExecuteSQL(sql, geom)
+    if layer is None:
+        return False
+    feat_count = layer.GetFeatureCount()
+    mask_dataset.ReleaseResultSet(layer)
+    return feat_count > 0
 
 def open_mask(args, input_ds):
     """
