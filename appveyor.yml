@@ -22,6 +22,11 @@ test_script:
   - coverage run --append world-dl.py -a merge -v -i ./input/google_map.img -o ./out || true
   - coverage run --append world-dl.py -a download -ov -c LZMA -t 512 -i ./input/google_map.img -o ./out
   - coverage run --append world-dl.py -a merge -v -i ./input/google_map.img -o ./out
+
+  - coverage run --append world-dl.py -a init -s 131072 -b 1024 -i ./input/google_map.img -o ./out -ml ./data/au.geojson
+  - coverage run --append world-dl.py -a download -ov -c LZMA -t 512 -i ./input/google_map.img -o ./out
+
+
   - coverage report --include world-dl.py
 
 on_success:
