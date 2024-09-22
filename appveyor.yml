@@ -2,11 +2,11 @@ image: Ubuntu2204
 
 install:
     - sudo apt-get update -y -q
-    - sudo apt-get install -y -q virtualenv python3-gdal
+    - sudo apt-get install -y -q virtualenv python3-gdal python3-numpy
     - virtualenv -p /usr/bin/python3 --system-site-packages ./venv
     - source ./venv/bin/activate
     - pip install --upgrade pip
-    - pip install --upgrade tqdm codecov coverage pylint bandit requests numpy argparse pysqlite3
+    - pip install --upgrade tqdm codecov coverage pylint bandit requests argparse pysqlite3
 
 build: off
 
