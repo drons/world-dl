@@ -1,0 +1,3 @@
+[MAIN]
+jobs=0
+max-locals = 20
