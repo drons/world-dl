@@ -1,4 +1,4 @@
-image: ubuntu
+image: Ubuntu2204
 
 install:
     - sudo apt-get update -y -q
