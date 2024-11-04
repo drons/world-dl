@@ -1,0 +1,80 @@
+name: Analyze
+
+on:
+  push:
+    branches: [ '**' ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  bandit:
+    runs-on: ubuntu-24.04
+    name: bandit
+    steps:
+    - uses: actions/checkout@v2
+    - name: install
+      run: |
+        sudo apt update
+        sudo apt upgrade
+        sudo apt install python3
+    - name: info
+      run: |
+        python3 --version
+    - name: bandit
+      run: |
+        pip install bandit
+        bandit ./world-dl.py
+  pylint:
+    runs-on: ubuntu-24.04
+    name: pylint
+    steps:
+      - uses: actions/checkout@v2
+      - name: install
+        run: |
+          sudo apt update
+          sudo apt upgrade
+          sudo apt install python3 libsqlite3-dev python3-gdal python3-numpy
+      - name: info
+        run: |
+          python3 --version
+      - name: pylint
+        run: |
+          pip install "pylint" "requests" "argparse" "pysqlite3" "tqdm"
+          pylint --disable=old-style-class --module-naming-style=any ./world-dl.py
+  coverage:
+    runs-on: ubuntu-24.04
+    name: coverage
+    env:
+      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+    steps:
+      - uses: actions/checkout@v2
+      - name: install
+        run: |
+          sudo apt update
+          sudo apt upgrade
+          sudo apt install python3 libsqlite3-dev python3-gdal python3-numpy
+      - name: info
+        run: |
+          python3 --version
+      - name: coverage
+        run: |
+          RUN() { echo -e "\033[36;1m\$ $@ \033[0m" ; "$@" ; }
+          RUN pip install "codecov" "coverage" "requests" "argparse" "pysqlite3" "tqdm"
+
+          RUN coverage run world-dl.py -a init -s 131072 -b 1024 -i ./input/google_map.img -o ./out -m ./data/mask-no-ant-3857.tif
+          RUN coverage run --append world-dl.py -a download -ov -c LZMA -t 512 -i ./input/google_map.img -o ./out
+          RUN rm ./out/gmap_0_0.tif
+          RUN rm ./out/gmap_0_1024.tif
+          RUN echo "Hello" >> ./out/gmap_1024_1024.tif
+          RUN coverage run --append world-dl.py -a merge -v -i ./input/google_map.img -o ./out || true
+          RUN coverage run --append world-dl.py -a download -ov -c LZMA -t 512 -i ./input/google_map.img -o ./out
+          RUN coverage run --append world-dl.py -a merge -v -i ./input/google_map.img -o ./out
+
+          RUN coverage run --append world-dl.py -a init -s 131072 -b 1024 -i ./input/google_map.img -o ./out -ml ./data/au.geojson
+          RUN coverage run --append world-dl.py -a download -ov -c LZMA -t 512 -i ./input/google_map.img -o ./out
+
+          RUN coverage report --include world-dl.py
+
+      - name: codecov
+        if: ${{ success() }}
+        run: codecov

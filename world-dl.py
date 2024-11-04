@@ -3,6 +3,7 @@ Imagery download tool from web image services
 """
 from __future__ import print_function
 
+import math
 import sys
 import os
 import shutil
@@ -33,10 +34,10 @@ class ImageBlock:
 
     def mask_boundary(self, mask_scale):
         """:returns block's bounds at mask image"""
-        return (int(self.offset_x * self.scale / mask_scale),
-                int(self.offset_y * self.scale / mask_scale),
-                int((self.offset_x + self.size) * self.scale / mask_scale),
-                int((self.offset_y + self.size) * self.scale / mask_scale))
+        return (math.floor(self.offset_x * self.scale / mask_scale),
+                math.floor(self.offset_y * self.scale / mask_scale),
+                math.ceil((self.offset_x + self.size) * self.scale / mask_scale),
+                math.ceil((self.offset_y + self.size) * self.scale / mask_scale))
 
 
 def get_db(args):
@@ -95,7 +96,11 @@ def open_mask(args, input_ds):
             mask_ds.RasterYSize >= input_ds.RasterYSize:
         print('Too big mask image. Discard it.')
         mask_ds = None
+        return mask_ds, 1
     mask_scale = int(input_ds.RasterXSize / mask_ds.RasterXSize)
+    print('Mask scale', mask_scale)
+    print('Mask pixels per block',
+          (args.block_size * mask_ds.RasterXSize * args.scale) / input_ds.RasterXSize)
     if mask_scale != int(input_ds.RasterYSize / mask_ds.RasterYSize):
         print('WARNING: Mask image have non uniform scale relative to input dataset')
     mask = mask_ds.GetRasterBand(1).ReadAsArray()
