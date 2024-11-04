@@ -1,6 +1,6 @@
 [![codefactor.io](https://www.codefactor.io/repository/github/drons/world-dl/badge?style=flat-square)](https://www.codefactor.io/repository/github/drons/world-dl)
 [![codecov](https://codecov.io/gh/drons/world-dl/branch/master/graph/badge.svg)](https://codecov.io/gh/drons/world-dl)
-[![Build Status](https://ci.appveyor.com/api/projects/status/github/drons/world-dl?branch=master&svg=true)](https://ci.appveyor.com/project/drons/nbody/world-dl/master)
+[![Build Status](https://github.com/drons/world-dl/actions/workflows/main.yml/badge.svg?branch=master](https://github.com/drons/world-dl/actions/workflows/main.yml)
 # Imagery download tool from web image services
 
 ## How to run

@@ -99,7 +99,8 @@ def open_mask(args, input_ds):
         return mask_ds, 1
     mask_scale = int(input_ds.RasterXSize / mask_ds.RasterXSize)
     print('Mask scale', mask_scale)
-    print('Mask pixels per block', (args.block_size * mask_ds.RasterXSize * args.scale) / input_ds.RasterXSize)
+    print('Mask pixels per block',
+          (args.block_size * mask_ds.RasterXSize * args.scale) / input_ds.RasterXSize)
     if mask_scale != int(input_ds.RasterYSize / mask_ds.RasterYSize):
         print('WARNING: Mask image have non uniform scale relative to input dataset')
     mask = mask_ds.GetRasterBand(1).ReadAsArray()
